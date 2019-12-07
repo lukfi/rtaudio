@@ -232,6 +232,8 @@ void RtAudio :: openRtApi( RtAudio::Api api )
   if ( api == RTAUDIO_DUMMY )
     rtapi_ = new RtApiDummy();
 #endif
+  if (rtapi_)
+    rtapi_->setErrorSignal(&RT_ERROR);
 }
 
 RtAudio :: RtAudio( RtAudio::Api api )
@@ -9995,8 +9997,13 @@ void RtApi :: error( RtAudioError::Type type )
 
   if ( type == RtAudioError::WARNING && showWarnings_ == true )
     std::cerr << '\n' << errorText_ << "\n\n";
-  else if ( type != RtAudioError::WARNING )
-    throw( RtAudioError( errorText_, type ) );
+  else if ( type != RtAudioError::WARNING ) {
+    if (RT_ERROR) {
+      RT_ERROR->Emit((int)type, errorText_);
+    } else {
+      throw( RtAudioError( errorText_, type ) );
+    }
+  }
 }
 
 void RtApi :: verifyStream()
