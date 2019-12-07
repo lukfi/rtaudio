@@ -67,6 +67,8 @@
 #include <stdexcept>
 #include <iostream>
 
+#include "threads/signals.h"
+
 /*! \typedef typedef unsigned long RtAudioFormat;
     \brief RtAudio data format type.
 
@@ -324,6 +326,8 @@ class RTAUDIO_DLL_PUBLIC RtAudio
     StreamParameters()
       : deviceId(0), nChannels(0), firstChannel(0) {}
   };
+
+  Signal<void(int, std::string)> RT_ERROR;
 
   //! The structure for specifying stream options.
   /*!
@@ -741,8 +745,11 @@ public:
   bool isStreamRunning( void ) const { return stream_.state == STREAM_RUNNING; }
   void showWarnings( bool value ) { showWarnings_ = value; }
 
+  void setErrorSignal(Signal<void(int, std::string)>* error) { RT_ERROR = error; }
 
 protected:
+
+  Signal<void(int, std::string)>* RT_ERROR = nullptr;
 
   static const unsigned int MAX_SAMPLE_RATES;
   static const unsigned int SAMPLE_RATES[];
