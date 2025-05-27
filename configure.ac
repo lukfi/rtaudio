@@ -1,8 +1,9 @@
 # Process this file with autoconf to produce a configure script.
-AC_INIT(RtAudio, 5.1.0, gary@music.mcgill.ca, rtaudio)
+
+AC_INIT([RtAudio],[6.0.1],[gary.scavone@mcgill.ca],[rtaudio])
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_SRCDIR(RtAudio.cpp)
-AC_CONFIG_FILES([rtaudio.pc Makefile tests/Makefile doc/Makefile doc/doxygen/Doxyfile])
+AC_CONFIG_FILES([rtaudio.pc Makefile tests/Makefile doc/Makefile doc/Doxyfile])
 AM_INIT_AUTOMAKE([1.14 -Wall -Werror foreign subdir-objects])
 
 # libtool version: current:revision:age
@@ -18,8 +19,8 @@ AM_INIT_AUTOMAKE([1.14 -Wall -Werror foreign subdir-objects])
 #
 # If any interfaces have been removed since the last public release, then set
 # age to 0.
-m4_define([lt_current], 6)
-m4_define([lt_revision], 1)
+m4_define([lt_current], 8)
+m4_define([lt_revision], 0)
 m4_define([lt_age], 0)
 
 m4_define([lt_version_info], [lt_current:lt_revision:lt_age])
@@ -29,10 +30,12 @@ SO_VERSION=lt_version_info
 AC_SUBST(SO_VERSION)
 AC_SUBST(api)
 AC_SUBST(req)
+AC_SUBST(req_libs)
 AC_SUBST(visibility)
 
 api=""
 req=""
+req_libs=""
 use_asio=""
 
 # standards version
@@ -52,12 +55,18 @@ AC_ARG_WITH(wasapi, [AS_HELP_STRING([--with-wasapi], [choose Windows Audio Sessi
 
 # Check version number coherency between RtAudio.h and configure.ac
 AC_MSG_CHECKING([that version numbers are coherent])
-RTAUDIO_VERSION=`sed -n 's/#define RTAUDIO_VERSION "\(.*\)"/\1/p' $srcdir/RtAudio.h`
-AS_IF([test "x$RTAUDIO_VERSION" != "x$PACKAGE_VERSION"],[
+RTAUDIO_VERSION_MAJOR=`sed -n 's/#define RTAUDIO_VERSION_MAJOR *\([0-9]*\)/\1/p' $srcdir/RtAudio.h`
+RTAUDIO_VERSION_MINOR=`sed -n 's/#define RTAUDIO_VERSION_MINOR *\([0-9]*\)/\1/p' $srcdir/RtAudio.h`
+RTAUDIO_VERSION_PATCH=`sed -n 's/#define RTAUDIO_VERSION_PATCH *\([0-9]*\)/\1/p' $srcdir/RtAudio.h`
+RTAUDIO_VERSION_BETA=`sed -n 's/#define RTAUDIO_VERSION_BETA *\([0-9]*\)/\1/p' $srcdir/RtAudio.h`
+
+AS_IF([test "0$RTAUDIO_VERSION_BETA" -gt 0 \
+             -a "x$RTAUDIO_VERSION_MAJOR.$RTAUDIO_VERSION_MINOR.${RTAUDIO_VERSION_PATCH}beta${RTAUDIO_VERSION_BETA}" == "x$PACKAGE_VERSION" \
+             -o "x$RTAUDIO_VERSION_MAJOR.$RTAUDIO_VERSION_MINOR.${RTAUDIO_VERSION_PATCH}" == "x$PACKAGE_VERSION"],[
+   AC_MSG_RESULT([yes])
+   ],[
    AC_MSG_RESULT([no])
    AC_MSG_FAILURE([testing RTAUDIO_VERSION==PACKAGE_VERSION failed, check that RtAudio.h defines RTAUDIO_VERSION as "$PACKAGE_VERSION" or that the first line of configure.ac has been updated.])
-   ],[
-   AC_MSG_RESULT([yes])
 ])
 # Enable some nice automake features if they are available
 m4_ifdef([AM_MAINTAINER_MODE], [AM_MAINTAINER_MODE])
@@ -82,7 +91,6 @@ LT_INIT([win32-dll])
 AC_CONFIG_MACRO_DIR([m4])
 
 # Checks for header files.
-AC_HEADER_STDC
 AC_CHECK_HEADERS(sys/ioctl.h unistd.h)
 
 # Check compiler and use -Wall if gnu
@@ -169,9 +177,9 @@ AS_IF([test "x$systems" = "x"],
     [*-*-freebsd*],  [systems="oss"],
     [*-*-linux*],    [systems="alsa pulse jack oss"],
     [*-apple*],      [systems="core jack"],
-    [*-mingw32*],    [systems="asio dsound wasapi jack"],
-    [*-mingw64*],    [systems="asio dsound wasapi jack"],
-    [*-msys*],       [systems="asio dsound wasapi jack"],
+    [*-mingw32*],    [systems="asio dsound pulse wasapi jack"],
+    [*-mingw64*],    [systems="asio dsound pulse wasapi jack"],
+    [*-msys*],       [systems="asio dsound pulse wasapi jack"],
   ))
 
 # If any were specifically requested disabled, do it.
@@ -184,6 +192,7 @@ AS_IF([test "x$with_asio"   = "xno"], [systems=`echo $systems|tr ' ' \\\\n|grep 
 AS_IF([test "x$with_dsound" = "xno"], [systems=`echo $systems|tr ' ' \\\\n|grep -v dsound`])
 AS_IF([test "x$with_wasapi" = "xno"], [systems=`echo $systems|tr ' ' \\\\n|grep -v wasapi`])
 systems=" `echo $systems|tr \\\\n ' '` "
+need_pthread=yes
 
 # For each audio system, check if it is selected and found.
 # Note: Order specified above is not necessarily respected. However,
@@ -207,6 +216,7 @@ AS_CASE(["$systems"], [*" pulse "*], [
      req="$req libpulse-simple"
      need_pthread=yes
      found="$found PulseAudio"
+     AC_CHECK_LIB(pulse, pa_strerror, [LIBS="$LIBS -lpulse"])
      LIBS="-lpulse-simple $LIBS"],
     AS_CASE(["$required"], [*" pulse "*],
       AC_MSG_ERROR([PulseAudio support requires the pulse-simple library!])))
@@ -248,6 +258,7 @@ AS_CASE(["$systems"], [*" jack "*], [
 AS_CASE(["$systems"], [*" core "*], [
   AC_CHECK_HEADER(CoreAudio/CoreAudio.h,
     [api="$api -D__MACOSX_CORE__"
+     req_libs="$req_libs -framework CoreAudio -framework CoreFoundation"
      need_pthread=yes
      found="$found CoreAudio",
      LIBS="$LIBS -framework CoreAudio -framework CoreFoundation"],
